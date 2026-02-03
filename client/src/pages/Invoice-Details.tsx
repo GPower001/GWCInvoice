@@ -491,23 +491,38 @@ export default function InvoiceDetail() {
     if (!invoiceRef.current || !invoice) return;
 
     try {
+      // Hide action buttons during PDF generation
+      const buttons = invoiceRef.current.querySelectorAll('button');
+      buttons.forEach(btn => btn.style.display = 'none');
+
       const canvas = await html2canvas(invoiceRef.current, {
-        scale: 2,
+        scale: 3, // Higher scale for better quality
         logging: false,
         backgroundColor: "#ffffff",
+        useCORS: true,
+        allowTaint: true,
       });
       
+      // Show buttons again
+      buttons.forEach(btn => btn.style.display = '');
+
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
         unit: "mm",
         format: "a4",
+        compress: true,
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
+      const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
+      // Center the image if it's smaller than the page
+      const yPosition = 0;
+
+      pdf.addImage(imgData, "PNG", 0, yPosition, imgWidth, imgHeight);
       pdf.save(`invoice-${invoice.invoiceNumber}.pdf`);
       
       toast({
@@ -618,11 +633,11 @@ export default function InvoiceDetail() {
         {/* Invoice Card */}
         <Card className="border-2 border-amber-200/50 shadow-2xl rounded-2xl overflow-hidden bg-gradient-to-br from-white via-amber-50/10 to-white">
           <CardContent className="p-0">
-            <div ref={invoiceRef} className="p-8 md:p-12 bg-white text-slate-900">
+            <div ref={invoiceRef} className="p-12 md:p-16 bg-white text-slate-900">
               {/* Header */}
-              <div className="flex justify-between items-start mb-12">
+              <div className="flex justify-between items-start mb-16 pb-8 border-b-2 border-amber-200">
                 <div>
-                  <h1 className="text-5xl font-bold font-display tracking-tight bg-gradient-to-r from-amber-700 to-amber-600 bg-clip-text text-transparent mb-2">
+                  <h1 className="text-5xl font-bold font-display tracking-tight text-amber-700 mb-2">
                     INVOICE
                   </h1>
                   <p className="text-amber-700/70 font-mono text-sm font-semibold">#{displayInvoice.invoiceNumber}</p>
@@ -644,9 +659,9 @@ export default function InvoiceDetail() {
                     ) : (
                       <Badge 
                         className={`font-semibold shadow-sm px-4 py-1.5 text-sm ${
-                          displayInvoice.status === 'paid' ? 'bg-gradient-to-r from-green-500 to-emerald-600 text-white border-0' : 
-                          displayInvoice.status === 'overdue' ? 'bg-gradient-to-r from-red-500 to-rose-600 text-white border-0' : 
-                          'bg-gradient-to-r from-amber-400 to-amber-500 text-white border-0'
+                          displayInvoice.status === 'paid' ? 'bg-green-600 text-white border-0' : 
+                          displayInvoice.status === 'overdue' ? 'bg-red-600 text-white border-0' : 
+                          'bg-amber-500 text-white border-0'
                         }`}
                       >
                         {displayInvoice.status.toUpperCase()}
@@ -655,7 +670,7 @@ export default function InvoiceDetail() {
                   </div>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold bg-gradient-to-r from-amber-700 to-amber-600 bg-clip-text text-transparent mb-1">
+                  <div className="text-2xl font-bold text-amber-700 mb-1">
                     {displayInvoice.companyName || "Your Company"}
                   </div>
                   <div className="text-sm text-amber-700/70 font-medium">
@@ -708,19 +723,19 @@ export default function InvoiceDetail() {
 
               {/* Items Table */}
               {items.length > 0 ? (
-                <div className="mb-8">
+                <div className="mb-10">
                   <table className="w-full">
                     <thead>
-                      <tr className="border-b-2 border-amber-300">
-                        <th className="text-left py-4 text-xs font-bold text-amber-800 uppercase tracking-wider">Service</th>
-                        <th className="text-left py-4 text-xs font-bold text-amber-800 uppercase tracking-wider">Description</th>
-                        <th className="text-right py-4 text-xs font-bold text-amber-800 uppercase tracking-wider">Price</th>
+                      <tr className="border-b-2 border-amber-300 bg-amber-50">
+                        <th className="text-left py-4 px-2 text-xs font-bold text-amber-900 uppercase tracking-wider">Service</th>
+                        <th className="text-left py-4 px-2 text-xs font-bold text-amber-900 uppercase tracking-wider">Description</th>
+                        <th className="text-right py-4 px-2 text-xs font-bold text-amber-900 uppercase tracking-wider">Price</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-amber-100">
                       {items.map((item, index) => (
                         <tr key={index} className="group hover:bg-amber-50/30 transition-colors">
-                          <td className="py-4 text-sm font-semibold text-slate-900">
+                          <td className="py-4 px-2 text-sm font-semibold text-slate-900">
                             {isEditing ? (
                               <Input
                                 value={item.service}
@@ -731,7 +746,7 @@ export default function InvoiceDetail() {
                               item.service
                             )}
                           </td>
-                          <td className="py-4 text-sm text-slate-700">
+                          <td className="py-4 px-2 text-sm text-slate-700">
                             {isEditing ? (
                               <Input
                                 value={item.description || ''}
@@ -742,7 +757,7 @@ export default function InvoiceDetail() {
                               item.description || '-'
                             )}
                           </td>
-                          <td className="py-4 text-sm font-mono text-right">
+                          <td className="py-4 px-2 text-sm font-mono text-right">
                             {isEditing ? (
                               <Input
                                 type="number"
@@ -751,7 +766,7 @@ export default function InvoiceDetail() {
                                 className="h-8 text-right border-amber-300"
                               />
                             ) : (
-                              <span className="font-bold text-lg bg-gradient-to-r from-amber-700 to-amber-600 bg-clip-text text-transparent">
+                              <span className="font-bold text-lg text-amber-700">
                                 {currencySymbol}{(Number(item.price) || 0).toLocaleString()}
                               </span>
                             )}
@@ -768,22 +783,22 @@ export default function InvoiceDetail() {
               )}
 
               {/* Totals */}
-              <div className="border-t-2 border-amber-200 pt-8">
+              <div className="border-t-2 border-amber-300 pt-8 mt-8">
                 <div className="flex justify-end">
-                  <div className="w-80 space-y-3">
-                    <div className="flex justify-between text-sm text-slate-700 font-medium">
+                  <div className="w-96 space-y-4 bg-amber-50/50 p-6 rounded-lg">
+                    <div className="flex justify-between text-base text-slate-800 font-medium">
                       <span>Subtotal</span>
-                      <span className="font-semibold">{currencySymbol}{items.reduce((sum, item) => sum + (Number(item.price) || 0), 0).toLocaleString()}</span>
+                      <span className="font-bold text-amber-700">{currencySymbol}{items.reduce((sum, item) => sum + (Number(item.price) || 0), 0).toLocaleString()}</span>
                     </div>
                     {displayInvoice.discountRate && displayInvoice.discountRate > 0 && (
-                      <div className="flex justify-between text-sm text-slate-700 font-medium">
+                      <div className="flex justify-between text-base text-slate-800 font-medium">
                         <span>Discount ({displayInvoice.discountRate}%)</span>
-                        <span className="font-semibold text-red-600">-{currencySymbol}{(Number(displayInvoice.discountAmount) || 0).toLocaleString()}</span>
+                        <span className="font-bold text-red-600">-{currencySymbol}{(Number(displayInvoice.discountAmount) || 0).toLocaleString()}</span>
                       </div>
                     )}
-                    <div className="flex justify-between text-xl font-bold pt-3 border-t-2 border-amber-200">
-                      <span className="text-slate-900">Total</span>
-                      <span className="bg-gradient-to-r from-amber-700 to-amber-600 bg-clip-text text-transparent">
+                    <div className="flex justify-between text-2xl font-bold pt-4 border-t-2 border-amber-300">
+                      <span className="text-slate-900">TOTAL</span>
+                      <span className="text-amber-700">
                         {currencySymbol}{
                           (items.reduce((sum, item) => sum + (Number(item.price) || 0), 0) - 
                           (displayInvoice.discountAmount || 0)).toLocaleString()
@@ -794,8 +809,8 @@ export default function InvoiceDetail() {
                 </div>
               </div>
               
-              <div className="mt-12 text-center text-xs text-amber-600/60">
-                <p className="font-medium">Thank you for your business!</p>
+              <div className="mt-16 text-center text-sm text-amber-700 border-t border-amber-200 pt-8">
+                <p className="font-semibold">Thank you for your business!</p>
               </div>
             </div>
           </CardContent>
