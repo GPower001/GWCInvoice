@@ -5,8 +5,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Loader2, ArrowLeft, Download, Printer, Edit2, Save, X } from "lucide-react";
+import { Loader2, ArrowLeft, Download, Printer, Edit2, Save, X, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { useRef, useState, useEffect } from "react";
 import html2canvas from "html2canvas";
@@ -14,6 +15,77 @@ import jsPDF from "jspdf";
 import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import logoGif from "@/assets/GWCLogo.jpeg";
+
+// Helper function to convert numbers to words
+function formatNumberToWords(num: number): string {
+  const units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
+  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  
+  if (num === 0) return "Zero";
+  if (num < 0) return "Negative " + formatNumberToWords(Math.abs(num));
+  
+  function convertLessThanThousand(n: number): string {
+    let result = "";
+    
+    if (n >= 100) {
+      result += units[Math.floor(n / 100)] + " Hundred";
+      n %= 100;
+      if (n > 0) result += " and ";
+    }
+    
+    if (n >= 20) {
+      result += tens[Math.floor(n / 10)];
+      n %= 10;
+      if (n > 0) result += " " + units[n];
+    } else if (n >= 10) {
+      result += teens[n - 10];
+    } else if (n > 0) {
+      result += units[n];
+    }
+    
+    return result;
+  }
+  
+  let result = "";
+  let n = Math.floor(num);
+  
+  if (n >= 1000000000) {
+    const billions = Math.floor(n / 1000000000);
+    result += convertLessThanThousand(billions) + " Billion";
+    n %= 1000000000;
+    if (n > 0) result += " ";
+  }
+  
+  if (n >= 1000000) {
+    const millions = Math.floor(n / 1000000);
+    result += convertLessThanThousand(millions) + " Million";
+    n %= 1000000;
+    if (n > 0) result += " ";
+  }
+  
+  if (n >= 1000) {
+    const thousands = Math.floor(n / 1000);
+    result += convertLessThanThousand(thousands) + " Thousand";
+    n %= 1000;
+    if (n > 0) result += " ";
+  }
+  
+  if (n > 0) {
+    result += convertLessThanThousand(n);
+  }
+  
+  // Add kobo if there are decimal places
+  const decimalPart = Math.round((num - Math.floor(num)) * 100);
+  if (decimalPart > 0) {
+    result += " Naira";
+    result += " and " + convertLessThanThousand(decimalPart) + " Kobo";
+  } else {
+    result += " Naira";
+  }
+  
+  return result;
+}
 
 export default function InvoiceDetail() {
   const params = useParams();
@@ -24,6 +96,15 @@ export default function InvoiceDetail() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedInvoice, setEditedInvoice] = useState<any>(null);
   const queryClient = useQueryClient();
+
+  // Default extra notes - can be edited
+  const defaultExtraNotes = `Payment Instructions:
+• Please make payment within 14 days
+• Bank transfer preferred
+• Include invoice number as reference
+
+Contact Information:
+For any queries, please contact our accounts department.`;
 
   // Find the invoice from the list
   const invoice = invoices?.find((inv: any) => inv._id === id);
@@ -67,6 +148,19 @@ export default function InvoiceDetail() {
       discountAmount,
       total
     };
+  };
+
+  // Helper function to generate the fixed Notes/Terms text with dynamic values
+  const generateNotesTermsText = (date: Date, amount: number) => {
+    const formattedDate = format(date, "do 'of' MMMM, yyyy");
+    const amountInWords = formatNumberToWords(amount);
+    const formattedAmount = amount.toLocaleString('en-NG', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+    
+    return `Notes / Terms
+As of ${formattedDate}, patient have a credit balance of ${amountInWords} [N${formattedAmount}] with the Clinic.`;
   };
 
   // Update mutation with immediate cache update
@@ -114,16 +208,20 @@ export default function InvoiceDetail() {
     const discountRate = editedInvoice.discountRate || 0;
     const { items: updatedItems, subtotal, discountAmount, total } = calculateAllTotals(editedInvoice.items || [], discountRate);
 
-    // Prepare data to send - NOW includes amount field
+    // Prepare data to send - INCLUDING ALL FIELDS
     const dataToSend = {
       ...editedInvoice,
-      items: updatedItems, // Now includes amount field
+      items: updatedItems,
       subtotal,
       discountAmount,
       total,
+      // Make sure to include all editable fields
+      patientCreditBalance: editedInvoice.patientCreditBalance || total || 0,
+      creditBalanceDate: editedInvoice.creditBalanceDate || editedInvoice.dueDate || new Date().toISOString(),
+      extraNotes: editedInvoice.extraNotes || "",
     };
 
-    console.log('Sending data:', dataToSend); // Debug
+    console.log('Saving data:', dataToSend); // Debug log
 
     updateMutation.mutate(dataToSend);
   };
@@ -245,6 +343,16 @@ export default function InvoiceDetail() {
   const discountAmount = displayInvoice.discountAmount || 0;
   const total = displayInvoice.total || 0;
 
+  // Get data from invoice - use editedInvoice values when editing
+  const extraNotes = displayInvoice.extraNotes || "";
+  const patientCreditBalance = displayInvoice.patientCreditBalance || total || 0;
+  const creditBalanceDate = displayInvoice.creditBalanceDate 
+    ? new Date(displayInvoice.creditBalanceDate) 
+    : (displayInvoice.dueDate ? new Date(displayInvoice.dueDate) : new Date());
+
+  // Generate the fixed Notes/Terms text with dynamic values
+  const notesTermsText = generateNotesTermsText(creditBalanceDate, patientCreditBalance);
+
   return (
     <Layout>
       <div className="max-w-5xl mx-auto space-y-6">
@@ -283,7 +391,7 @@ export default function InvoiceDetail() {
                 <>
                   <Button onClick={() => setIsEditing(true)} variant="outline" className="border-amber-300 hover:bg-amber-50">
                     <Edit2 className="w-4 h-4 mr-2" />
-                    Edit
+                    Edit Invoice
                   </Button>
                   <Button onClick={handleDownloadPDF} className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white shadow-lg shadow-amber-500/30">
                     <Download className="w-4 h-4 mr-2" />
@@ -502,7 +610,7 @@ export default function InvoiceDetail() {
               )}
 
               {/* Totals */}
-              <div className="border-t-2 border-amber-300 pt-8 mt-8">
+              <div className="border-t-2 border-amber-300 pt-8">
                 <div className="flex justify-end">
                   <div className="w-96 space-y-4 bg-amber-50/50 p-6 rounded-lg">
                     <div className="flex justify-between text-base text-slate-800 font-medium">
@@ -528,9 +636,124 @@ export default function InvoiceDetail() {
                   </div>
                 </div>
               </div>
-              
-              <div className="mt-16 text-center text-sm text-amber-700 border-t border-amber-200 pt-8">
-                <p className="font-semibold">Thank you for your business!</p>
+
+              {/* Footer Section with Notes/Terms */}
+              <div className="mt-12 pt-8 border-t-2 border-amber-300">
+                <div className="bg-gradient-to-br from-amber-50/30 to-white p-6 rounded-xl border-2 border-amber-200/50 shadow-inner">
+                  <h3 className="text-sm font-bold uppercase text-amber-700 mb-4 tracking-wider border-b pb-2 border-amber-200">
+                    Notes / Terms
+                  </h3>
+                  
+                  {isEditing ? (
+                    <div className="space-y-6">
+                      {/* Fixed Notes/Terms Section - Not Editable Text but Dynamic Values Can Be Edited */}
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-semibold text-slate-700">
+                            Credit Balance Information
+                          </label>
+                          <div className="text-xs text-slate-500 bg-amber-50 px-2 py-1 rounded">
+                            Date and amount are editable
+                          </div>
+                        </div>
+                        <div className="p-4 bg-amber-50/50 rounded-lg border border-amber-200">
+                          <p className="text-sm font-mono whitespace-pre-line text-slate-700">
+                            {notesTermsText}
+                          </p>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                              Balance Date
+                            </label>
+                            <Input
+                              type="date"
+                              value={format(creditBalanceDate, 'yyyy-MM-dd')}
+                              onChange={(e) => {
+                                const updated = {...editedInvoice, creditBalanceDate: new Date(e.target.value).toISOString()};
+                                setEditedInvoice(updated);
+                              }}
+                              className="border-amber-300 focus:border-amber-500"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs font-semibold text-slate-700 mb-1 block">
+                              Balance Amount (₦)
+                            </label>
+                            <Input
+                              type="number"
+                              value={patientCreditBalance}
+                              onChange={(e) => {
+                                const updated = {...editedInvoice, patientCreditBalance: Number(e.target.value)};
+                                setEditedInvoice(updated);
+                              }}
+                              step="0.01"
+                              className="border-amber-300 focus:border-amber-500"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Editable Extra Notes Section */}
+                      <div className="space-y-3 pt-4 border-t border-amber-200">
+                        <div className="flex justify-between items-center">
+                          <label className="text-sm font-semibold text-slate-700">
+                            Additional Notes (Optional)
+                          </label>
+                          <div className="text-xs text-slate-500 bg-amber-50 px-2 py-1 rounded">
+                            Add payment instructions, contact info, etc.
+                          </div>
+                        </div>
+                        <Textarea
+                          value={extraNotes}
+                          onChange={(e) => {
+                            const updated = {...editedInvoice, extraNotes: e.target.value};
+                            setEditedInvoice(updated);
+                          }}
+                          className="min-h-[120px] border-amber-300 focus:border-amber-500 text-sm"
+                          placeholder="Add payment instructions, contact information, or any additional notes for the client..."
+                        />
+                        {extraNotes.trim() && (
+                          <div className="text-xs text-slate-500">
+                            <p className="font-medium mb-1">Preview:</p>
+                            <div className="bg-amber-50/50 p-3 rounded border border-amber-200">
+                              <p className="whitespace-pre-line text-slate-700 text-sm">
+                                {extraNotes}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Fixed Notes/Terms Display */}
+                      <div className="p-4 bg-amber-50/30 rounded-lg">
+                        <p className="text-sm font-mono whitespace-pre-line text-slate-700">
+                          {notesTermsText}
+                        </p>
+                      </div>
+                      
+                      {/* Extra Notes Display (if any) */}
+                      {extraNotes.trim() && (
+                        <div className="mt-4 p-4 bg-white rounded-lg border border-amber-200">
+                          <p className="text-sm whitespace-pre-line text-slate-700">
+                            {extraNotes}
+                          </p>
+                        </div>
+                      )}
+                      
+                      <div className="flex justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-amber-200">
+                        <span>Balance Date: {format(creditBalanceDate, "MMMM d, yyyy")}</span>
+                        <span>Balance Amount: ₦{patientCreditBalance.toLocaleString('en-NG', {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2
+                        })}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>

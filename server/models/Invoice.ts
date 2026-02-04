@@ -46,6 +46,9 @@ export interface IInvoice extends Document {
   discountRate?: number;
   discountAmount?: number;
   total: number;
+   patientCreditBalance?: number;
+  creditBalanceDate?: Date;
+  extraNotes?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -72,6 +75,18 @@ const InvoiceSchema: Schema = new Schema({
   discountRate: { type: Number, default: 0 },
   discountAmount: { type: Number, default: 0 },
   total: { type: Number, required: true },
+    patientCreditBalance: { 
+    type: Number, 
+    default: 0 
+  },
+  creditBalanceDate: { 
+    type: Date, 
+    default: Date.now 
+  },
+  extraNotes: { 
+    type: String, 
+    default: "" 
+  },
 }, {
   timestamps: true, // Automatically adds createdAt and updatedAt
 });

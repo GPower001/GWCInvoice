@@ -106,6 +106,9 @@ export interface InsertInvoice {
   discountRate?: number;
   discountAmount?: number;
   total: number;
+  patientCreditBalance?: number;
+  creditBalanceDate?: Date;
+  extraNotes?: string;
 }
 
 
