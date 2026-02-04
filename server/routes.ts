@@ -86,7 +86,9 @@ import { z } from "zod";
 const invoiceItemSchema = z.object({
   service: z.string().min(1, "Service name is required"),
   description: z.string().optional(),
+  quantity: z.number().min(1, "Quantity must be at least 1").default(1),
   price: z.number().min(0, "Price must be positive"),
+  amount: z.number().min(0, "Amount must be positive"),
 });
 
 const createInvoiceSchema = z.object({

@@ -15,44 +15,6 @@ import { useToast } from "@/hooks/use-toast";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import logoGif from "@/assets/GWCLogo.jpeg";
 
-// Helper function to convert number to words (Nigerian Naira)
-function numberToWords(num: number): string {
-  if (num === 0) return "Zero";
-  
-  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"];
-  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-  const teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
-  
-  function convertLessThanThousand(n: number): string {
-    if (n === 0) return "";
-    if (n < 10) return ones[n];
-    if (n < 20) return teens[n - 10];
-    if (n < 100) return tens[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + ones[n % 10] : "");
-    return ones[Math.floor(n / 100)] + " Hundred" + (n % 100 !== 0 ? " and " + convertLessThanThousand(n % 100) : "");
-  }
-  
-  if (num < 1000) return convertLessThanThousand(num);
-  if (num < 1000000) {
-    const thousands = Math.floor(num / 1000);
-    const remainder = num % 1000;
-    return convertLessThanThousand(thousands) + " Thousand" + (remainder !== 0 ? " " + convertLessThanThousand(remainder) : "");
-  }
-  if (num < 1000000000) {
-    const millions = Math.floor(num / 1000000);
-    const remainder = num % 1000000;
-    let result = convertLessThanThousand(millions) + " Million";
-    if (remainder >= 1000) {
-      result += " " + convertLessThanThousand(Math.floor(remainder / 1000)) + " Thousand";
-      const finalRemainder = remainder % 1000;
-      if (finalRemainder !== 0) result += " " + convertLessThanThousand(finalRemainder);
-    } else if (remainder !== 0) {
-      result += " " + convertLessThanThousand(remainder);
-    }
-    return result;
-  }
-  return num.toLocaleString(); // For very large numbers, just return formatted number
-}
-
 export default function InvoiceDetail() {
   const params = useParams();
   const id = params.id as string;
@@ -61,38 +23,53 @@ export default function InvoiceDetail() {
   const invoiceRef = useRef<HTMLDivElement>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedInvoice, setEditedInvoice] = useState<any>(null);
-  const [notes, setNotes] = useState("");
   const queryClient = useQueryClient();
 
   // Find the invoice from the list
   const invoice = invoices?.find((inv: any) => inv._id === id);
 
-  // Initialize edited invoice when invoice is loaded
+  // Update editedInvoice whenever invoice changes from the server
   useEffect(() => {
-    if (invoice && !editedInvoice) {
+    if (invoice) {
       setEditedInvoice({...invoice});
-      // Set default notes or load from invoice
-      if (invoice.notes) {
-        setNotes(invoice.notes);
-      } else {
-        // Default template
-        const totalAmount = (invoice.items || []).reduce((sum: number, item: any) => {
-          const quantity = Number(item.quantity) || 1;
-          const unitPrice = Number(item.price) || 0;
-          return sum + (quantity * unitPrice);
-        }, 0) - (invoice.discountAmount || 0);
-        
-        const amountInWords = numberToWords(Math.floor(totalAmount));
-        const currencyName = invoice.currency === 'NGN' ? 'Naira' : 'Dollars';
-        const currencySymbol = invoice.currency === 'NGN' ? '₦' : '$';
-        const invoiceDate = invoice.createdAt ? format(new Date(invoice.createdAt), "do MMMM yyyy") : format(new Date(), "do MMMM yyyy");
-        
-        setNotes(`As of ${invoiceDate}, patient have a credit balance of ${amountInWords} ${currencyName} (${currencySymbol}${totalAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}) with the Clinic.`);
-      }
     }
   }, [invoice]);
 
-  // Update mutation
+  // Helper function to calculate item amount
+  const calculateItemAmount = (item: any) => {
+    const quantity = Number(item.quantity) || 1;
+    const unitPrice = Number(item.price) || 0;
+    return quantity * unitPrice;
+  };
+
+  // Helper function to calculate all totals from items and discount rate
+  const calculateAllTotals = (items: any[], discountRate: number = 0) => {
+    // Calculate amounts for each item
+    const itemsWithAmounts = items.map(item => {
+      const amount = calculateItemAmount(item);
+      return {
+        ...item,
+        amount: amount
+      };
+    });
+
+    // Calculate subtotal
+    const subtotal = itemsWithAmounts.reduce((sum, item) => sum + (item.amount || 0), 0);
+    
+    // Calculate discount
+    const discountAmount = discountRate ? subtotal * (discountRate / 100) : 0;
+    
+    const total = subtotal - discountAmount;
+    
+    return {
+      items: itemsWithAmounts,
+      subtotal,
+      discountAmount,
+      total
+    };
+  };
+
+  // Update mutation with immediate cache update
   const updateMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await fetch(`/api/invoices/${id}`, {
@@ -103,15 +80,25 @@ export default function InvoiceDetail() {
       if (!res.ok) throw new Error('Failed to update invoice');
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/invoices'] });
+    onSuccess: (updatedInvoice) => {
+      // Update the cache immediately for instant UI update
+      queryClient.setQueryData(['/api/invoices'], (old: any) => {
+        if (!old) return old;
+        return old.map((inv: any) => 
+          inv._id === id ? { ...inv, ...updatedInvoice } : inv
+        );
+      });
+      
+      // Also update the editedInvoice state with the server response
+      setEditedInvoice(updatedInvoice);
+      
       setIsEditing(false);
       toast({
         title: "Success",
         description: "Invoice updated successfully",
       });
     },
-    onError: () => {
+    onError: (error) => {
       toast({
         title: "Error",
         description: "Failed to update invoice",
@@ -123,32 +110,27 @@ export default function InvoiceDetail() {
   const handleSave = () => {
     if (!editedInvoice) return;
 
-    // Recalculate totals
-    const items = editedInvoice.items || [];
-    const subtotal = items.reduce((sum: number, item: any) => {
-      const quantity = Number(item.quantity) || 1;
-      const unitPrice = Number(item.price) || 0;
-      return sum + (quantity * unitPrice);
-    }, 0);
-    const discountAmount = editedInvoice.discountRate 
-      ? subtotal * (editedInvoice.discountRate / 100) 
-      : 0;
-    const total = subtotal - discountAmount;
+    // Calculate and update all totals
+    const discountRate = editedInvoice.discountRate || 0;
+    const { items: updatedItems, subtotal, discountAmount, total } = calculateAllTotals(editedInvoice.items || [], discountRate);
 
-    updateMutation.mutate({
+    // Prepare data to send - NOW includes amount field
+    const dataToSend = {
       ...editedInvoice,
+      items: updatedItems, // Now includes amount field
       subtotal,
       discountAmount,
       total,
-      notes, // Save the notes
-    });
+    };
+
+    console.log('Sending data:', dataToSend); // Debug
+
+    updateMutation.mutate(dataToSend);
   };
 
   const handleCancel = () => {
-    setEditedInvoice({...invoice});
-    // Reset notes to original or default
-    if (invoice.notes) {
-      setNotes(invoice.notes);
+    if (invoice) {
+      setEditedInvoice({...invoice});
     }
     setIsEditing(false);
   };
@@ -156,7 +138,20 @@ export default function InvoiceDetail() {
   const updateItem = (index: number, field: string, value: any) => {
     const newItems = [...(editedInvoice?.items || [])];
     newItems[index] = { ...newItems[index], [field]: value };
-    setEditedInvoice({ ...editedInvoice, items: newItems });
+    
+    // Create updated invoice with new items
+    const updatedInvoiceData = { ...editedInvoice, items: newItems };
+    
+    // Recalculate amounts and totals
+    const discountRate = updatedInvoiceData.discountRate || 0;
+    const { items: itemsWithAmounts, subtotal, discountAmount, total } = calculateAllTotals(newItems, discountRate);
+    
+    updatedInvoiceData.items = itemsWithAmounts;
+    updatedInvoiceData.subtotal = subtotal;
+    updatedInvoiceData.discountAmount = discountAmount;
+    updatedInvoiceData.total = total;
+    
+    setEditedInvoice(updatedInvoiceData);
   };
 
   const handleDownloadPDF = async () => {
@@ -165,10 +160,10 @@ export default function InvoiceDetail() {
     try {
       // Hide action buttons during PDF generation
       const buttons = invoiceRef.current.querySelectorAll('button');
-      buttons.forEach(btn => btn.style.display = 'none');
+      buttons.forEach(btn => (btn as HTMLElement).style.display = 'none');
 
       const canvas = await html2canvas(invoiceRef.current, {
-        scale: 3, // Higher scale for better quality
+        scale: 3,
         logging: false,
         backgroundColor: "#ffffff",
         useCORS: true,
@@ -176,7 +171,7 @@ export default function InvoiceDetail() {
       });
       
       // Show buttons again
-      buttons.forEach(btn => btn.style.display = '');
+      buttons.forEach(btn => (btn as HTMLElement).style.display = '');
 
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
@@ -187,14 +182,10 @@ export default function InvoiceDetail() {
       });
 
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
       const imgWidth = pdfWidth;
       const imgHeight = (canvas.height * pdfWidth) / canvas.width;
 
-      // Center the image if it's smaller than the page
-      const yPosition = 0;
-
-      pdf.addImage(imgData, "PNG", 0, yPosition, imgWidth, imgHeight);
+      pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
       pdf.save(`invoice-${invoice.invoiceNumber}.pdf`);
       
       toast({
@@ -244,9 +235,15 @@ export default function InvoiceDetail() {
     );
   }
 
+  // Use editedInvoice when editing, otherwise use invoice (which now gets updated immediately via cache)
   const displayInvoice = isEditing ? editedInvoice : invoice;
   const items = (displayInvoice.items || []) as any[];
   const currencySymbol = displayInvoice.currency === 'NGN' ? '₦' : '$';
+  
+  // Use stored totals instead of recalculating each time
+  const subtotal = displayInvoice.subtotal || 0;
+  const discountAmount = displayInvoice.discountAmount || 0;
+  const total = displayInvoice.total || 0;
 
   return (
     <Layout>
@@ -320,7 +317,10 @@ export default function InvoiceDetail() {
                     {isEditing ? (
                       <Select 
                         value={editedInvoice.status} 
-                        onValueChange={(value) => setEditedInvoice({...editedInvoice, status: value})}
+                        onValueChange={(value) => {
+                          const updated = {...editedInvoice, status: value};
+                          setEditedInvoice(updated);
+                        }}
                       >
                         <SelectTrigger className="w-[150px] border-amber-300">
                           <SelectValue />
@@ -348,7 +348,7 @@ export default function InvoiceDetail() {
                   <div className="text-2xl font-bold text-amber-700 mb-2">
                     {displayInvoice.companyName || "Your Company"}
                   </div>
-                  <div className="text-xs text-black-700/70 leading-relaxed">
+                  <div className="text-xs text-slate-700 leading-relaxed">
                     <p>14B, Dan Ogbeide Close, Off Oyibo Adjarho Street, Lekki Phase 1, Lagos</p>
                     <p>7, Mamman Kontagora Crescent, Katampe Extension, Abuja</p>
                     <p className="mt-1">Phone No: 09090004531 | Website: glorywellnessng.com</p>
@@ -406,11 +406,7 @@ export default function InvoiceDetail() {
                     <div className="flex justify-between items-baseline pt-1">
                       <span className="text-sm font-bold text-slate-900">Amount Due ({currencySymbol}):</span>
                       <span className="text-sm font-bold text-slate-900">
-                        {(items.reduce((sum, item) => {
-                          const quantity = Number(item.quantity) || 1;
-                          const unitPrice = Number(item.price) || 0;
-                          return sum + (quantity * unitPrice);
-                        }, 0) - (displayInvoice.discountAmount || 0)).toLocaleString()}
+                        {total.toLocaleString()}
                       </span>
                     </div>
                   </div>
@@ -434,7 +430,8 @@ export default function InvoiceDetail() {
                       {items.map((item, index) => {
                         const quantity = Number(item.quantity) || 1;
                         const unitPrice = Number(item.price) || 0;
-                        const amount = quantity * unitPrice;
+                        // Use stored amount if it exists, otherwise calculate it
+                        const amount = item.amount || calculateItemAmount(item);
                         
                         return (
                           <tr key={index} className="group hover:bg-amber-50/30 transition-colors">
@@ -466,7 +463,7 @@ export default function InvoiceDetail() {
                                   type="number"
                                   value={quantity}
                                   onChange={(e) => updateItem(index, 'quantity', Number(e.target.value))}
-                                  className="h-8 text-center border-amber-300"
+                                  className="h-8 text-center border-amber-300 w-20 mx-auto"
                                   min="1"
                                 />
                               ) : (
@@ -510,48 +507,30 @@ export default function InvoiceDetail() {
                   <div className="w-96 space-y-4 bg-amber-50/50 p-6 rounded-lg">
                     <div className="flex justify-between text-base text-slate-800 font-medium">
                       <span>Subtotal</span>
-                      <span className="font-bold text-amber-700">{currencySymbol}{items.reduce((sum, item) => {
-                        const quantity = Number(item.quantity) || 1;
-                        const unitPrice = Number(item.price) || 0;
-                        return sum + (quantity * unitPrice);
-                      }, 0).toLocaleString()}</span>
+                      <span className="font-bold text-amber-700">
+                        {currencySymbol}{subtotal.toLocaleString()}
+                      </span>
                     </div>
                     {displayInvoice.discountRate && displayInvoice.discountRate > 0 && (
                       <div className="flex justify-between text-base text-slate-800 font-medium">
                         <span>Discount ({displayInvoice.discountRate}%)</span>
-                        <span className="font-bold text-red-600">-{currencySymbol}{(Number(displayInvoice.discountAmount) || 0).toLocaleString()}</span>
+                        <span className="font-bold text-red-600">
+                          -{currencySymbol}{discountAmount.toLocaleString()}
+                        </span>
                       </div>
                     )}
                     <div className="flex justify-between text-2xl font-bold pt-4 border-t-2 border-amber-300">
                       <span className="text-slate-900">TOTAL</span>
                       <span className="text-amber-700">
-                        {currencySymbol}{
-                          (items.reduce((sum, item) => {
-                            const quantity = Number(item.quantity) || 1;
-                            const unitPrice = Number(item.price) || 0;
-                            return sum + (quantity * unitPrice);
-                          }, 0) - (displayInvoice.discountAmount || 0)).toLocaleString()
-                        }
+                        {currencySymbol}{total.toLocaleString()}
                       </span>
                     </div>
                   </div>
                 </div>
               </div>
-              {/* Notes / Terms Section */}
-              <div className="text-sm text-amber-700 border-t border-amber-200 pt-8">
-                 <h3 className="text-sm font-bold text-slate-900">Notes / Terms</h3>
-                {isEditing ? (
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full min-h-[100px] p-3 text-sm text-slate-700 leading-relaxed border border-amber-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-amber-500 resize-y"
-                    placeholder="Enter notes or terms for your client..."
-                  />
-                ) : (
-                  <p className="text-sm text-slate-700 leading-relaxed whitespace-pre-wrap">
-                    {notes || 'No notes added.'}
-                  </p>
-                )}
+              
+              <div className="mt-16 text-center text-sm text-amber-700 border-t border-amber-200 pt-8">
+                <p className="font-semibold">Thank you for your business!</p>
               </div>
             </div>
           </CardContent>

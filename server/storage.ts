@@ -61,10 +61,35 @@
 // export const storage = new DatabaseStorage();
 import { Invoice, type IInvoice } from "./models/Invoice.js";
 
+// export interface InvoiceItem {
+//   service: string;
+//   description?: string;
+//   price: number;
+// }
+
+// export interface InsertInvoice {
+//   invoiceNumber: string;
+//   clientName: string;
+//   companyName?: string;
+//   clientEmail?: string;
+//   amount: number;
+//   status?: "pending" | "paid" | "overdue";
+//   dueDate: Date;
+//   currency?: string;
+//   items: InvoiceItem[];
+//   subtotal?: number;
+//   discountRate?: number;
+//   discountAmount?: number;
+//   total: number;
+// }
+
+
 export interface InvoiceItem {
   service: string;
   description?: string;
+  quantity: number;      // Add this
   price: number;
+  amount: number;        // Add this
 }
 
 export interface InsertInvoice {
@@ -82,6 +107,7 @@ export interface InsertInvoice {
   discountAmount?: number;
   total: number;
 }
+
 
 export interface IStorage {
   getInvoices(): Promise<IInvoice[]>;

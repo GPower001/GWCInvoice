@@ -27,7 +27,9 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface IInvoiceItem {
   service: string;
   description: string;
+  quantity: number;
   price: number;
+  amount: number;        
 }
 
 export interface IInvoice extends Document {
@@ -51,7 +53,9 @@ export interface IInvoice extends Document {
 const InvoiceItemSchema = new Schema({
   service: { type: String, required: true },
   description: { type: String, required: false },
+  quantity: { type: Number, required: true, default: 1 },
   price: { type: Number, required: true },
+  amount: { type: Number, required: true },
 }, { _id: false }); // Don't create _id for sub-documents
 
 const InvoiceSchema: Schema = new Schema({
