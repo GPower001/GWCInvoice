@@ -1,4 +1,3 @@
-
 // import { useState, useRef } from "react";
 // import { useCreateInvoice } from "@/hooks/use-invoices";
 // import { Layout } from "@/components/layout";
@@ -18,7 +17,8 @@
 //   id: string;
 //   service: string;
 //   description: string;
-//   price: number;
+//   quantity: number;
+//   price: number; // This is the unit price
 // };
 
 // export default function CreateInvoice() {
@@ -60,12 +60,18 @@
 //     }
 //   };
 
-//   const subtotal = items.reduce((acc, item) => acc + (item.price || 0), 0);
+//   // Calculate subtotal: sum of (quantity × unit price) for all items
+//   const subtotal = items.reduce((acc, item) => {
+//     const quantity = Number(item.quantity) || 1;
+//     const unitPrice = Number(item.price) || 0;
+//     return acc + (quantity * unitPrice);
+//   }, 0);
+  
 //   const discountAmount = hasDiscount ? subtotal * (discountRate / 100) : 0;
 //   const total = subtotal - discountAmount;
 
 //   const addItem = () => {
-//     setItems([...items, { id: crypto.randomUUID(), service: "", description: "", price: 0 }]);
+//     setItems([...items, { id: crypto.randomUUID(), service: "", description: "", quantity: 1, price: 0 }]);
 //   };
 
 //   const removeItem = (id: string) => {
@@ -97,7 +103,7 @@
 //       dueDate,
 //       amount: total,
 //       currency,
-//       items: items.map(({ service, description, price }) => ({ service, description, price })),
+//       items: items.map(({ service, description, quantity, price }) => ({ service, description, quantity, price })),
 //       subtotal,
 //       discountRate: hasDiscount ? discountRate : 0,
 //       discountAmount,
@@ -360,50 +366,73 @@
 //                 <table className="w-full mb-8">
 //                   <thead>
 //                     <tr className="border-b-2 border-amber-200/50">
-//                       <th className="text-left py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-1/3">Service</th>
+//                       <th className="text-left py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider">Items</th>
 //                       <th className="text-left py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider">Description</th>
-//                       <th className="text-right py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-32">Price</th>
+//                       <th className="text-center py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-20">Qty</th>
+//                       <th className="text-right py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-28">Unit Price</th>
+//                       <th className="text-right py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-32">Amount</th>
 //                       <th className="w-10"></th>
 //                     </tr>
 //                   </thead>
 //                   <tbody className="divide-y divide-amber-100">
-//                     {items.map((item) => (
-//                       <tr key={item.id} className="group hover:bg-amber-50/30 transition-colors">
-//                         <td className="py-4 align-top pr-4">
-//                           <Input 
-//                             className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-medium text-amber-950 placeholder:text-amber-300 transition-colors"
-//                             placeholder="Service Name"
-//                             value={item.service}
-//                             onChange={(e) => updateItem(item.id, "service", e.target.value)}
-//                           />
-//                         </td>
-//                         <td className="py-4 align-top pr-4">
-//                           <Input 
-//                             className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm text-amber-700/80 placeholder:text-amber-300 transition-colors"
-//                             placeholder="Description of work..."
-//                             value={item.description}
-//                             onChange={(e) => updateItem(item.id, "description", e.target.value)}
-//                           />
-//                         </td>
-//                         <td className="py-4 align-top">
-//                           <Input 
-//                             type="number"
-//                             className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-mono text-right text-amber-950 placeholder:text-amber-300 transition-colors"
-//                             placeholder="0.00"
-//                             value={item.price || ""}
-//                             onChange={(e) => updateItem(item.id, "price", parseFloat(e.target.value) || 0)}
-//                           />
-//                         </td>
-//                         <td className="py-4 align-top text-right">
-//                           <button 
-//                             onClick={() => removeItem(item.id)}
-//                             className="p-2 text-amber-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
-//                           >
-//                             <Trash2 className="w-4 h-4" />
-//                           </button>
-//                         </td>
-//                       </tr>
-//                     ))}
+//                     {items.map((item) => {
+//                       const quantity = Number(item.quantity) || 1;
+//                       const unitPrice = Number(item.price) || 0;
+//                       const amount = quantity * unitPrice;
+                      
+//                       return (
+//                         <tr key={item.id} className="group hover:bg-amber-50/30 transition-colors">
+//                           <td className="py-4 align-top pr-2">
+//                             <Input 
+//                               className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-medium text-amber-950 placeholder:text-amber-300 transition-colors"
+//                               placeholder="Item Name"
+//                               value={item.service}
+//                               onChange={(e) => updateItem(item.id, "service", e.target.value)}
+//                             />
+//                           </td>
+//                           <td className="py-4 align-top pr-2">
+//                             <Input 
+//                               className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm text-amber-700/80 placeholder:text-amber-300 transition-colors"
+//                               placeholder="Description..."
+//                               value={item.description}
+//                               onChange={(e) => updateItem(item.id, "description", e.target.value)}
+//                             />
+//                           </td>
+//                           <td className="py-4 align-top">
+//                             <Input 
+//                               type="number"
+//                               min="1"
+//                               className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm text-center text-amber-950 placeholder:text-amber-300 transition-colors"
+//                               placeholder="1"
+//                               value={item.quantity || ""}
+//                               onChange={(e) => updateItem(item.id, "quantity", parseInt(e.target.value) || 1)}
+//                             />
+//                           </td>
+//                           <td className="py-4 align-top">
+//                             <Input 
+//                               type="number"
+//                               className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-mono text-right text-amber-950 placeholder:text-amber-300 transition-colors"
+//                               placeholder="0.00"
+//                               value={item.price || ""}
+//                               onChange={(e) => updateItem(item.id, "price", parseFloat(e.target.value) || 0)}
+//                             />
+//                           </td>
+//                           <td className="py-4 align-top text-right pr-2">
+//                             <div className="p-2 text-sm font-mono font-bold text-amber-700">
+//                               {currency === 'NGN' ? '₦' : '$'}{amount.toLocaleString()}
+//                             </div>
+//                           </td>
+//                           <td className="py-4 align-top text-right">
+//                             <button 
+//                               onClick={() => removeItem(item.id)}
+//                               className="p-2 text-amber-300 hover:text-red-500 hover:bg-red-50 rounded transition-colors opacity-0 group-hover:opacity-100"
+//                             >
+//                               <Trash2 className="w-4 h-4" />
+//                             </button>
+//                           </td>
+//                         </tr>
+//                       );
+//                     })}
 //                   </tbody>
 //                 </table>
                 
@@ -438,10 +467,6 @@
 //                     </div>
 //                   </div>
 //                 </div>
-//               </div>
-              
-//               <div className="mt-12 text-center text-xs text-amber-700/60 font-medium">
-//                 <p>Thank you for your business!</p>
 //               </div>
 //             </div>
 //           </div>
@@ -516,12 +541,15 @@ export default function CreateInvoice() {
   };
 
   // Calculate subtotal: sum of (quantity × unit price) for all items
-  const subtotal = items.reduce((acc, item) => {
-    const quantity = Number(item.quantity) || 1;
-    const unitPrice = Number(item.price) || 0;
-    return acc + (quantity * unitPrice);
-  }, 0);
+  const calculateSubtotal = () => {
+    return items.reduce((acc, item) => {
+      const quantity = Number(item.quantity) || 1;
+      const unitPrice = Number(item.price) || 0;
+      return acc + (quantity * unitPrice);
+    }, 0);
+  };
   
+  const subtotal = calculateSubtotal();
   const discountAmount = hasDiscount ? subtotal * (discountRate / 100) : 0;
   const total = subtotal - discountAmount;
 
@@ -540,33 +568,87 @@ export default function CreateInvoice() {
   };
 
   const handleSave = () => {
-    if (!clientName || !companyName || items.some(i => !i.service || !i.price)) {
+    // Check for required fields
+    if (!clientName.trim() || !companyName.trim() || items.length === 0) {
       toast({
         title: "Validation Error",
-        description: "Please fill in all required fields",
+        description: "Please fill in all required fields and add at least one item",
         variant: "destructive",
       });
       return;
     }
 
+    // Check each item for required fields
+    const invalidItems = items.filter(item => {
+      const service = item.service?.trim();
+      const price = Number(item.price);
+      
+      // Check if service is empty OR price is 0 or NaN
+      return !service || isNaN(price) || price <= 0;
+    });
+
+    if (invalidItems.length > 0) {
+      toast({
+        title: "Validation Error",
+        description: "Please ensure all items have a service name and a valid price (> 0)",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Prepare items with calculated amount for each (backend expects amount field)
+    const itemsWithAmount = items.map(({ service, description, quantity, price }) => {
+      const qty = Number(quantity) || 1;
+      const unitPrice = Number(price) || 0;
+      const amount = qty * unitPrice;
+      
+      return { 
+        service: service.trim(), 
+        description: description.trim(), 
+        quantity: qty, 
+        price: unitPrice,
+        amount: amount // Add the calculated amount field that backend expects
+      };
+    });
+
+    // Recalculate totals with the prepared items
+    const invoiceSubtotal = itemsWithAmount.reduce((acc, item) => acc + item.amount, 0);
+    const invoiceDiscountAmount = hasDiscount ? invoiceSubtotal * (discountRate / 100) : 0;
+    const invoiceTotal = invoiceSubtotal - invoiceDiscountAmount;
+
     saveInvoice({
       invoiceNumber,
-      clientName,
-      companyName,
+      clientName: clientName.trim(),
+      companyName: companyName.trim(),
       clientEmail,
       status,
       dueDate,
-      amount: total,
+      amount: invoiceTotal,
       currency,
-      items: items.map(({ service, description, quantity, price }) => ({ service, description, quantity, price })),
-      subtotal,
+      items: itemsWithAmount, // Use items with calculated amount
+      subtotal: invoiceSubtotal,
       discountRate: hasDiscount ? discountRate : 0,
-      discountAmount,
-      total,
+      discountAmount: invoiceDiscountAmount,
+      total: invoiceTotal,
     }, {
       onSuccess: () => {
-        // Reset form or redirect
+        // Reset form
         setInvoiceNumber(generateInvoiceNumber());
+        setClientName("");
+        setClientEmail("");
+        setItems([]);
+        toast({
+          title: "Success",
+          description: "Invoice saved successfully",
+        });
+      },
+      onError: (error) => {
+        console.error("Invoice save error:", error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to save invoice. Please check all fields.",
+          variant: "destructive",
+        });
       }
     });
   };
@@ -592,7 +674,7 @@ export default function CreateInvoice() {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
 
       pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`${invoiceNumber}.pdf`);
+      pdf.save(`invoice-${invoiceNumber}.pdf`);
       
       toast({
         title: "Downloaded",
@@ -659,12 +741,15 @@ export default function CreateInvoice() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold uppercase text-amber-900/70 tracking-wider">Client Name</label>
+                  <label className="text-xs font-semibold uppercase text-amber-900/70 tracking-wider">
+                    Client Name <span className="text-red-500">*</span>
+                  </label>
                   <Input 
                     value={clientName} 
                     onChange={(e) => setClientName(e.target.value)}
-                    className="bg-amber-50/30 border-amber-200/50 focus:border-amber-400 focus:ring-amber-400"
+                    className={`bg-amber-50/30 border-amber-200/50 focus:border-amber-400 focus:ring-amber-400 ${!clientName.trim() ? 'ring-1 ring-red-300' : ''}`}
                     placeholder="Client Name"
+                    required
                   />
                 </div>
 
@@ -821,10 +906,14 @@ export default function CreateInvoice() {
                 <table className="w-full mb-8">
                   <thead>
                     <tr className="border-b-2 border-amber-200/50">
-                      <th className="text-left py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider">Items</th>
+                      <th className="text-left py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider">
+                        Items <span className="text-red-500">*</span>
+                      </th>
                       <th className="text-left py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider">Description</th>
                       <th className="text-center py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-20">Qty</th>
-                      <th className="text-right py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-28">Unit Price</th>
+                      <th className="text-right py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-28">
+                        Unit Price <span className="text-red-500">*</span>
+                      </th>
                       <th className="text-right py-3 text-xs font-bold text-amber-900/70 uppercase tracking-wider w-32">Amount</th>
                       <th className="w-10"></th>
                     </tr>
@@ -839,10 +928,11 @@ export default function CreateInvoice() {
                         <tr key={item.id} className="group hover:bg-amber-50/30 transition-colors">
                           <td className="py-4 align-top pr-2">
                             <Input 
-                              className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-medium text-amber-950 placeholder:text-amber-300 transition-colors"
+                              className={`border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-medium text-amber-950 placeholder:text-amber-300 transition-colors ${!item.service.trim() ? 'ring-1 ring-red-300' : ''}`}
                               placeholder="Item Name"
                               value={item.service}
                               onChange={(e) => updateItem(item.id, "service", e.target.value)}
+                              required
                             />
                           </td>
                           <td className="py-4 align-top pr-2">
@@ -866,10 +956,13 @@ export default function CreateInvoice() {
                           <td className="py-4 align-top">
                             <Input 
                               type="number"
-                              className="border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-mono text-right text-amber-950 placeholder:text-amber-300 transition-colors"
+                              min="0"
+                              step="0.01"
+                              className={`border-transparent bg-transparent hover:bg-amber-50/50 focus:bg-white focus:border-amber-300 h-auto p-2 text-sm font-mono text-right text-amber-950 placeholder:text-amber-300 transition-colors ${(!item.price || Number(item.price) <= 0) ? 'ring-1 ring-red-300' : ''}`}
                               placeholder="0.00"
                               value={item.price || ""}
                               onChange={(e) => updateItem(item.id, "price", parseFloat(e.target.value) || 0)}
+                              required
                             />
                           </td>
                           <td className="py-4 align-top text-right pr-2">
